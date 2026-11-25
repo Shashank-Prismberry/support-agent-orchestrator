@@ -1,11 +1,10 @@
 # Project Progress --- Support Agent Orchestrator
 
 **Last updated:** 2026-11-24\
-**Overall status:** Architecture established; repository foundation in
-preparation\
-**Current phase:** Documentation / foundation\
-**Current official deliverable:** AGT-1.1 --- LangGraph State &
-Supervisor Node (not started)
+**Overall status:** AGT-1.2 complete; AGT-2.1 not started\
+**Current phase:** Official deliverables\
+**Current official deliverable:** AGT-2.1 --- RAG & MCP Tool Wiring
+(not started)
 
 ## Decisions established
 
@@ -37,14 +36,29 @@ Supervisor Node (not started)
 -   Local project folder created.
 -   Folder opened in ChatGPT Codex local environment.
 -   Root `AGENTS.md` created.
+-   AGT-1.1 implemented and verified: typed graph state, trusted user
+    context, provider-independent Supervisor router, terminal routing
+    graph and unit tests.
+-   AGT-1.1 security remediation verified: immutable trusted context,
+    internal graph-input boundary, metadata-free routing input and
+    credential sanitization.
+-   Final AGT-1.1 security fixes verified: controlled graph-input
+    construction, server-owned message identifiers, and provider-error
+    exception isolation.
+-   AGT-1.2 implemented and verified: async injected specialist nodes,
+    role-only prompts, sanitized generation requests, safe failures, and
+    Supervisor-to-specialist-to-END integration.
+-   AGT-1.2 review hardening verified: JSON-delimited role metadata,
+    explicit specialist state validation, and strict specialist mapping
+    validation.
+-   AGT-1.2 invocation contract verified: legacy graphs retain sync
+    invocation, specialist-enabled graphs reject sync calls with a clear
+    async-only error, and async invocation remains available.
 
 ## Not yet confirmed / not done
 
 -   Git initialization, GitHub remote and branch state.
--   Source/test project scaffold.
--   `pyproject.toml`, `uv.lock`, Dockerfiles and Compose setup.
--   Application code and tests.
--   Any official AGT deliverable implementation.
+-   Dockerfiles and Compose setup.
 -   Live integration with Backend, MCP or RAG.
 
 Do not mark work complete unless actually done and verified.
@@ -53,8 +67,8 @@ Do not mark work complete unless actually done and verified.
 
   ID        Deliverable                            Status
   --------- -------------------------------------- -------------
-  AGT-1.1   LangGraph State & Supervisor Node      Not started
-  AGT-1.2   Specialized Sub-Agent Nodes            Not started
+  AGT-1.1   LangGraph State & Supervisor Node      Complete (44 tests, 100% coverage)
+  AGT-1.2   Specialized Sub-Agent Nodes            Complete (62 tests, 100% coverage)
   AGT-2.1   RAG & MCP Tool Wiring                  Not started
   AGT-3.1   Human-in-the-Loop (HITL) Refund Gate   Not started
   AGT-3.2   Graceful RBAC Refusal Handling         Not started
@@ -63,15 +77,9 @@ Do not mark work complete unless actually done and verified.
 
 ## Immediate next steps
 
-1.  Add/review refreshed documentation.
+1.  Review AGT-1.2 and commit manually.
 2.  Preserve canonical `docs/CONTRACTS.md` v3.0 unchanged.
-3.  Confirm Git/remote state without rewriting history.
-4.  Create `src/` and tests structure.
-5.  Configure uv, Ruff, pytest and Pydantic Settings.
-6.  Establish Docker setup for API/worker coordinated with team
-    PostgreSQL.
-7.  Run foundation checks.
-8.  Begin AGT-1.1.
+3.  Begin AGT-2.1 after approval.
 
 ## Update rule
 

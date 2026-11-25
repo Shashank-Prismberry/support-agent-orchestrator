@@ -4,6 +4,8 @@ Preserve the official IDs, titles and order.
 
 ## AGT-1.1 --- LangGraph State & Supervisor Node
 
+**Status:** Completed 2026-11-24.
+
 **Official description:** Define `AgentState` (`messages`,
 `user_context`, `active_agent`, `approval_status`) and implement
 Supervisor intent router.
@@ -16,7 +18,16 @@ Tests: state creation/update; representative routing; unknown/ambiguous
 intent; missing/invalid context; raw credentials absent from state;
 deterministic mocked LLM routing.
 
+Completion record: implemented a validated `TrustedUserContext`, typed
+`AgentState`, provider-independent Supervisor routing port, and central
+terminal routing graph. Tests cover all required routes, fallback and
+failure paths, trusted-context validation, message reduction, graph
+termination and sensitive-context boundaries. The suite passed with
+100% coverage.
+
 ## AGT-1.2 --- Specialized Sub-Agent Nodes
+
+**Status:** Completed 2026-11-24.
 
 **Official description:** Implement Triage_Agent, Knowledge_Agent and
 Billing_Agent nodes with role-aware system instructions.
@@ -28,6 +39,12 @@ injected ports; central graph routing.
 Tests: each agent independently; expected state updates; missing
 context; agent/provider failures; role-aware instructions; specialists
 cannot freely invoke each other; no raw JWT/secrets in prompts.
+
+Completion record: implemented independently injected asynchronous
+Triage, Knowledge, and Billing nodes with role-only prompt framing,
+sanitized generation requests, safe output/provider failure handling,
+and Supervisor-to-one-specialist-to-END graph integration. No external
+tools, retrieval, authorization, or approval behavior was added.
 
 ## AGT-2.1 --- RAG & MCP Tool Wiring
 
