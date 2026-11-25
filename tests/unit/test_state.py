@@ -52,6 +52,52 @@ def test_initial_state_redacts_credentials_from_message_content(trusted_context)
     assert state["messages"][0].content == "My header is Bearer [REDACTED_CREDENTIAL]"
 
 
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        "password=pass-value",
+        "passwd: pass-value",
+        "pwd='pass value'",
+        "api_key=key-value",
+        "api-key: key-value",
+        "secret=secret-value",
+        "secret_key=secret-value",
+        "token=token-value",
+        "access_token=token-value",
+        "refresh-token: token-value",
+        "auth_token=token-value",
+        "authorization_token=token-value",
+        "client_secret=secret-value",
+        "private-key=key-value",
+        "credential=credential-value",
+        "credentials: credential-value",
+        "jwt=jwt-value",
+    ],
+)
+def test_initial_state_redacts_supported_credential_assignments(
+    trusted_context, assignment
+) -> None:
+    secret_value = assignment.split("=", 1)[-1].split(":", 1)[-1].strip(" '")
+    state = create_initial_state(
+        user_context=trusted_context,
+        messages=[HumanMessage(content=f"Configuration {assignment} is supplied")],
+    )
+
+    sanitized = state["messages"][0].content
+    assert "[REDACTED_CREDENTIAL]" in sanitized
+    assert secret_value not in sanitized
+
+
+def test_credential_redaction_does_not_redact_unassigned_words(trusted_context) -> None:
+    content = "My password reset is pending; the API key documentation is helpful."
+    state = create_initial_state(
+        user_context=trusted_context,
+        messages=[HumanMessage(content=content)],
+    )
+
+    assert state["messages"][0].content == content
+
+
 def test_initial_state_preserves_bearer_token_documentation_placeholders(trusted_context) -> None:
     content = "How do I configure Authorization: Bearer <token> in the API documentation?"
     state = create_initial_state(
