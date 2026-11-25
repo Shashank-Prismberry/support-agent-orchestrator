@@ -27,6 +27,8 @@ termination and sensitive-context boundaries. The suite passed with
 
 ## AGT-1.2 --- Specialized Sub-Agent Nodes
 
+**Status:** Completed 2026-11-24.
+
 **Official description:** Implement Triage_Agent, Knowledge_Agent and
 Billing_Agent nodes with role-aware system instructions.
 
@@ -37,6 +39,12 @@ injected ports; central graph routing.
 Tests: each agent independently; expected state updates; missing
 context; agent/provider failures; role-aware instructions; specialists
 cannot freely invoke each other; no raw JWT/secrets in prompts.
+
+Completion record: implemented independently injected asynchronous
+Triage, Knowledge, and Billing nodes with role-only prompt framing,
+sanitized generation requests, safe output/provider failure handling,
+and Supervisor-to-one-specialist-to-END graph integration. No external
+tools, retrieval, authorization, or approval behavior was added.
 
 ## AGT-2.1 --- RAG & MCP Tool Wiring
 
