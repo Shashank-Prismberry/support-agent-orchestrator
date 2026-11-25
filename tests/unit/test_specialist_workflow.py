@@ -3,7 +3,10 @@ import pytest
 from support_agent_orchestrator.application.specialists import build_specialist_nodes
 from support_agent_orchestrator.application.supervisor import InvalidTrustedContextError
 from support_agent_orchestrator.domain.input import create_internal_graph_input
-from support_agent_orchestrator.graph.workflow import build_orchestration_graph
+from support_agent_orchestrator.graph.workflow import (
+    AsyncOnlyGraphError,
+    build_orchestration_graph,
+)
 from support_agent_orchestrator.ports.agents import GenerationRequest
 from support_agent_orchestrator.ports.routing import RoutingInput
 
@@ -11,8 +14,10 @@ from support_agent_orchestrator.ports.routing import RoutingInput
 class Router:
     def __init__(self, destination):
         self.destination = destination
+        self.calls = 0
 
     def route(self, request: RoutingInput):
+        self.calls += 1
         return self.destination
 
 
@@ -59,6 +64,17 @@ async def test_async_graph_rejects_plain_input(trusted_context, user_message) ->
 
     with pytest.raises(TypeError, match="internal graph input"):
         await graph.ainvoke({})  # type: ignore[arg-type]
+
+
+def test_specialist_graph_sync_error_is_application_level(trusted_context, user_message) -> None:
+    router = Router("triage")
+    graph = build_orchestration_graph(router, specialists=specialist_set())
+
+    with pytest.raises(AsyncOnlyGraphError, match="use ainvoke"):
+        graph.invoke(
+            create_internal_graph_input(user_context=trusted_context, messages=[user_message])
+        )
+    assert router.calls == 0
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,7 @@
 """Central LangGraph construction for AGT-1.1."""
 
+from collections.abc import Callable
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -16,26 +18,39 @@ from support_agent_orchestrator.domain.state import ActiveAgent, AgentState
 from support_agent_orchestrator.ports.routing import SupervisorRouter
 
 
-class OrchestrationGraph:
-    """Internal graph facade that accepts only canonical graph input."""
+class AsyncOnlyGraphError(RuntimeError):
+    """Raised when synchronous invocation is attempted on an async-only graph."""
 
-    def __init__(self, graph: CompiledStateGraph) -> None:
+
+class OrchestrationGraph:
+    """Graph facade with explicit legacy-sync and specialist-async contracts.
+
+    Legacy graphs reliably support ``invoke()``. They expose ``ainvoke()``
+    for compatibility, but LangGraph 1.2.24 has a known process-lifecycle
+    limitation when that method executes synchronous nodes. Graphs built with
+    injected asynchronous specialists are async-only and require ``ainvoke()``.
+    """
+
+    def __init__(self, graph: CompiledStateGraph, *, async_only: bool = False) -> None:
         self._graph = graph
+        self._async_only = async_only
 
     def invoke(self, graph_input: InternalGraphInput) -> dict[str, object]:
-        if not isinstance(graph_input, InternalGraphInput):
-            raise TypeError("Graph invocation requires internal graph input")
-        try:
-            state = graph_input.to_state()
-        except InvalidInternalGraphInputError:
-            raise InvalidTrustedContextError(
-                "A validated trusted user context is required"
-            ) from None
+        if self._async_only:
+            raise AsyncOnlyGraphError(
+                "This graph contains asynchronous specialist nodes; use ainvoke()."
+            )
+        state = self._prepare_state(graph_input)
         return self._graph.invoke(state)
 
     async def ainvoke(self, graph_input: InternalGraphInput) -> dict[str, object]:
         """Invoke workflows containing async specialist nodes."""
 
+        state = self._prepare_state(graph_input)
+        return await self._graph.ainvoke(state)
+
+    @staticmethod
+    def _prepare_state(graph_input: InternalGraphInput) -> AgentState:
         if not isinstance(graph_input, InternalGraphInput):
             raise TypeError("Graph invocation requires internal graph input")
         try:
@@ -44,7 +59,7 @@ class OrchestrationGraph:
             raise InvalidTrustedContextError(
                 "A validated trusted user context is required"
             ) from None
-        return await self._graph.ainvoke(state)
+        return state
 
 
 def build_orchestration_graph(
@@ -84,7 +99,7 @@ def build_orchestration_graph(
     graph.add_edge("triage", END)
     graph.add_edge("knowledge", END)
     graph.add_edge("billing", END)
-    return OrchestrationGraph(graph.compile())
+    return OrchestrationGraph(graph.compile(), async_only=specialists is not None)
 
 
 def _active_agent_route(state: AgentState) -> ActiveAgent:
@@ -100,7 +115,7 @@ def _routing_boundary(_: AgentState) -> dict[str, object]:
     return {}
 
 
-def _node_callable(node: object):
+def _node_callable(node: object) -> object:
     if isinstance(node, SpecialistNode):
 
         async def invoke(state: AgentState) -> dict[str, object]:
@@ -110,7 +125,7 @@ def _node_callable(node: object):
     return node
 
 
-def _async_supervisor(supervisor: Supervisor):
+def _async_supervisor(supervisor: Supervisor) -> Callable[..., object]:
     async def invoke(state: AgentState) -> dict[str, object]:
         return supervisor(state)
 

@@ -9,6 +9,7 @@ from support_agent_orchestrator.domain.input import (
     create_internal_graph_input,
 )
 from support_agent_orchestrator.graph.workflow import (
+    AsyncOnlyGraphError,
     _active_agent_route,
     build_orchestration_graph,
 )
@@ -91,6 +92,32 @@ def test_graph_preserves_safe_router_failure(trusted_context, user_message) -> N
 
     assert error.value.__cause__ is None
     assert "secret provider detail" not in str(error.value)
+
+
+def test_specialist_graph_rejects_sync_invoke_before_execution(
+    trusted_context, user_message
+) -> None:
+    router = DeterministicRouter("triage")
+
+    class Generator:
+        async def generate(self, request):
+            raise AssertionError("generator must not be called")
+
+    from support_agent_orchestrator.application.specialists import build_specialist_nodes
+
+    graph = build_orchestration_graph(
+        router,
+        specialists=build_specialist_nodes(
+            triage=Generator(), knowledge=Generator(), billing=Generator()
+        ),
+    )
+
+    with pytest.raises(AsyncOnlyGraphError, match="use ainvoke"):
+        graph.invoke(
+            create_internal_graph_input(user_context=trusted_context, messages=[user_message])
+        )
+
+    assert router.destination == "triage"
 
 
 def test_conditional_route_rejects_missing_active_agent(trusted_context, user_message) -> None:

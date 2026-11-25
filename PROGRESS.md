@@ -51,6 +51,9 @@
 -   AGT-1.2 review hardening verified: JSON-delimited role metadata,
     explicit specialist state validation, and strict specialist mapping
     validation.
+-   AGT-1.2 invocation contract verified: legacy graphs retain sync
+    invocation, specialist-enabled graphs reject sync calls with a clear
+    async-only error, and async invocation remains available.
 
 ## Not yet confirmed / not done
 
