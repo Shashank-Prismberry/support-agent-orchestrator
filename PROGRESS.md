@@ -1,10 +1,10 @@
 # Project Progress --- Support Agent Orchestrator
 
 **Last updated:** 2026-11-24\
-**Overall status:** AGT-1.1 complete; AGT-1.2 not started\
+**Overall status:** AGT-1.2 complete; AGT-2.1 not started\
 **Current phase:** Official deliverables\
-**Current official deliverable:** AGT-1.2 --- Specialized Sub-Agent
-Nodes (not started)
+**Current official deliverable:** AGT-2.1 --- RAG & MCP Tool Wiring
+(not started)
 
 ## Decisions established
 
@@ -45,6 +45,12 @@ Nodes (not started)
 -   Final AGT-1.1 security fixes verified: controlled graph-input
     construction, server-owned message identifiers, and provider-error
     exception isolation.
+-   AGT-1.2 implemented and verified: async injected specialist nodes,
+    role-only prompts, sanitized generation requests, safe failures, and
+    Supervisor-to-specialist-to-END integration.
+-   AGT-1.2 review hardening verified: JSON-delimited role metadata,
+    explicit specialist state validation, and strict specialist mapping
+    validation.
 
 ## Not yet confirmed / not done
 
@@ -59,7 +65,7 @@ Do not mark work complete unless actually done and verified.
   ID        Deliverable                            Status
   --------- -------------------------------------- -------------
   AGT-1.1   LangGraph State & Supervisor Node      Complete (44 tests, 100% coverage)
-  AGT-1.2   Specialized Sub-Agent Nodes            Not started
+  AGT-1.2   Specialized Sub-Agent Nodes            Complete (62 tests, 100% coverage)
   AGT-2.1   RAG & MCP Tool Wiring                  Not started
   AGT-3.1   Human-in-the-Loop (HITL) Refund Gate   Not started
   AGT-3.2   Graceful RBAC Refusal Handling         Not started
@@ -68,11 +74,9 @@ Do not mark work complete unless actually done and verified.
 
 ## Immediate next steps
 
-1.  Review AGT-1.1 and commit manually.
+1.  Review AGT-1.2 and commit manually.
 2.  Preserve canonical `docs/CONTRACTS.md` v3.0 unchanged.
-3.  Establish Docker setup for API/worker coordinated with team
-    PostgreSQL.
-4.  Begin AGT-1.2 after approval.
+3.  Begin AGT-2.1 after approval.
 
 ## Update rule
 
