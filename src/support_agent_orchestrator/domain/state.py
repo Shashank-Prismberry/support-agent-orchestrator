@@ -23,6 +23,13 @@ ApprovalStatus = Literal["not_required", "pending", "approved", "rejected"]
 
 _BEARER_TOKEN_PATTERN = re.compile(r"\bbearer\s+([A-Za-z0-9._~+/=-]+)", re.IGNORECASE)
 _JWT_PATTERN = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{16,}\b")
+_CREDENTIAL_ASSIGNMENT_PATTERN = re.compile(
+    r"(?i)\b(?:password|passwd|pwd|api[_-]?key|secret(?:[_-]?(?:key|token))?|"
+    r"token|access[_-]?token|refresh[_-]?token|auth(?:orization)?[_-]?token|"
+    r"client[_-]?secret|private[_-]?key|credentials?|jwt)\b"
+    r"(?P<separator>\s*[:=]\s*)"
+    r"(?P<value>\"[^\"]*\"|'[^']*'|[^\s,;]+)"
+)
 _SENSITIVE_METADATA_KEYS = frozenset(
     {"authorization", "access_token", "api_key", "password", "secret", "token"}
 )
@@ -148,7 +155,20 @@ def _contains_non_placeholder_bearer(value: str) -> bool:
 
 
 def _redact_credentials(value: str) -> str:
-    redacted = _JWT_PATTERN.sub("[REDACTED_CREDENTIAL]", value)
+    """Redact JWTs, Bearer tokens, and explicit assignments to common secret fields.
+
+    Assignment redaction covers password/passwd/pwd, token variants, API keys,
+    secrets, credentials, JWTs, and client/private keys using ``=`` or ``:``.
+    This is targeted text sanitization, not detection of every secret format.
+    """
+    redacted = _CREDENTIAL_ASSIGNMENT_PATTERN.sub(
+        lambda match: (
+            f"{match.group(0)[: match.start('separator') - match.start()]}"
+            f"{match.group('separator')}[REDACTED_CREDENTIAL]"
+        ),
+        value,
+    )
+    redacted = _JWT_PATTERN.sub("[REDACTED_CREDENTIAL]", redacted)
 
     def replace_bearer(match: re.Match[str]) -> str:
         if match.group(1).lower() in _DOCUMENTATION_PLACEHOLDERS:

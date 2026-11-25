@@ -3,7 +3,7 @@
 **Last updated:** 2026-11-25
 **Overall status:** AGT-1.1 and AGT-1.2 complete; AGT-2.1 not started
 **Current official deliverable:** AGT-2.1 — RAG & MCP Tool Wiring
-**Architecture direction:** Quick/Context/Deep workflow orchestration approved as a project direction; implementation not started.
+**Architecture direction:** Quick/Context/Deep workflow orchestration approved as a project direction. Proposed ORCH-P1 is implemented; ORCH-P2 through ORCH-P4 remain unstarted.
 
 ## Decisions established
 
@@ -47,7 +47,14 @@
 - AGT-1.2 implemented and verified: async injected specialist nodes, role-only prompts, sanitized generation requests, safe failures and Supervisor-to-specialist-to-END integration.
 - AGT-1.2 review hardening: JSON-delimited role metadata, explicit specialist state validation and strict specialist mapping validation.
 - AGT-1.2 invocation contract: legacy graphs retain sync invocation; specialist-enabled graphs reject sync calls with a clear async-only error; async invocation remains available.
-- AGT-1.1 and AGT-1.2 were merged into `main` by the user. Current working branch for next work was created from updated main: `feature/AGT-2.1-rag-mcp-tool-wiring`.
+- ORCH-P1 implementation branch: `feature/orch-p1-request-analyzer`. The separate local branch `feature/AGT-2.1-rag-mcp-tool-wiring` contains the AGT-2.1 capability-dispatch foundation.
+- Proposed ORCH-P1 — Request Analyzer completed separately from the official AGT deliverables:
+  - P1.1 — Added the strict `RequestAnalysis` domain contract.
+  - P1.2 — Added the provider-independent analyzer input and asynchronous port.
+  - P1.3 — Added the application analyzer boundary with message sanitization and bounded conversation context.
+  - P1.4 — Integrated analysis into LangGraph with private workflow state, Quick/Context routing, terminal Deep handling, and safe analyzer failure propagation.
+  - Security corrections — Added common credential-assignment redaction, Human/AI-only prior-context filtering, and a bounded routing-message role length.
+  - Verification — Full test suite: 153 passed; focused tests for the latest corrections: 84 passed; Ruff passed.
 
 Historical test counts differ across progress snapshots and completion summaries. Preserve the detailed completion evidence in the relevant task/review history; do not treat the counts below as a fresh test run.
 
@@ -69,7 +76,7 @@ These are temporary planning labels, not official AGT task IDs. Team ownership/I
 
 | Proposed work | Scope | Status |
 |---|---|---|
-| ORCH-P1 | Request Analyzer and Quick/Context/Deep routing | Not started |
+| ORCH-P1 | Request Analyzer and Quick/Context/Deep routing | Complete |
 | ORCH-P2 | Deep Planner and plan/DAG validation | Not started |
 | ORCH-P3 | Execution state, scheduler and specialist task interface | Not started |
 | ORCH-P4 | Aggregation, partial failures and reliability | Not started |
@@ -78,7 +85,7 @@ These are temporary planning labels, not official AGT task IDs. Team ownership/I
 
 - Live integration with Backend, MCP or RAG.
 - AGT-2.1 adapters and capability registration.
-- Request Analyzer, Planner, scheduler and Aggregator implementation.
+- Planner, scheduler and Aggregator implementation.
 - Formal team assignment/IDs for ORCH-P1–P4.
 - Final Quick/Context/Deep classification rubric.
 - Final RAG authentication/context propagation details with RAG owner.
@@ -100,7 +107,7 @@ Do not mark work complete unless actually implemented and verified.
 3. Finalize AGT-2.1 implementation design and dependencies.
 4. Implement AGT-2.1 capability contracts/adapters using only defined operations; do not expand it into the complete persistence or memory system.
 5. Establish the approved PostgreSQL checkpointing and durable recovery foundation before AGT-3.1 depends on HITL interruption/resumption.
-6. Plan ORCH-P1 through ORCH-P4 as separately approved workstreams; they are not mandatory prerequisites for AGT-3.1.
+6. Continue planning ORCH-P2 through ORCH-P4 as separately approved workstreams; ORCH-P1 is complete, and these proposed workstreams are not mandatory prerequisites for AGT-3.1.
 
 ## Update rule
 
