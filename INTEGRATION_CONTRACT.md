@@ -1,12 +1,10 @@
-# Agent Orchestrator --- Integration Contract
+# Agent Orchestrator — Integration Contract
 
-**Authority:** `docs/CONTRACTS.md` (shared Team Contract v3.0) is
-authoritative. This document is a service-specific companion and must
-not override or silently amend the shared contract.
+**Authority:** `docs/CONTRACTS.md` (Shared Team Contract v3.0) is authoritative. This document is an Agent-service companion and must not override or silently amend the shared contract.
 
 ## 1. Service boundary
 
-``` text
+```text
 Frontend -> Backend API/Gateway -> Agent Orchestrator
                                   +-> Backend REST APIs
                                   +-> MCP server
@@ -14,65 +12,50 @@ Frontend -> Backend API/Gateway -> Agent Orchestrator
                                   +-> LLM provider
 ```
 
-Frontend does not call Agent directly. Backend forwards authenticated
-requests and proxies SSE without buffering.
+Frontend does not call Agent directly. Backend forwards authenticated requests and proxies SSE without buffering.
 
 ## 2. Database ownership
 
-Latest Backend confirmation supersedes the earlier two-logical-database
-proposal: - PostgreSQL database: `support_ai_db` - Backend schema:
-`public` - Agent schema: `orchestrator` - Backend provisions
-`orchestrator` during database/Docker initialization. - Agent
-independently manages migrations/checkpoint setup in `orchestrator`. -
-Backend Alembic is scoped to `public`.
+- PostgreSQL database: `support_ai_db`
+- Backend-owned schema: `public`
+- Agent-owned schema: `orchestrator`
+- Backend provisions `orchestrator` during database/Docker initialization.
+- Agent manages its migrations/checkpointer in `orchestrator`.
+- Backend Alembic remains scoped to `public`.
 
 Backend-provided local development example:
 
-``` env
+```env
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/support_ai_db
 ```
 
 Local defaults only; never use as production credentials.
 
-Agent operational data: LangGraph checkpoints/blobs, workflow jobs,
-conversation records/ephemeral turns, SSE event history, and future
-approved memory/summary records.
+Agent operational data may include LangGraph checkpoints/blobs, workflow jobs, conversation/ephemeral turn records and SSE event history. Business data remains Backend-owned.
 
-Backend business data: organizations, users, customers, tickets,
-official ticket messages, private notes, invoices/refunds and business
-audit logs.
+**Hard rule:** Never query Backend-owned tables directly. Use authenticated Backend REST APIs and agreed MCP tools so Backend enforces authorization, RLS, tenant isolation and audit logging. Never query RAG tables directly.
 
-**Hard rule:** Never query Backend-owned tables directly. Use
-authenticated Backend REST APIs and agreed MCP tools so Backend enforces
-authorization, RLS, tenant isolation and audit logging. Official ticket
-dialogue and private notes are synchronized through Backend APIs;
-internal execution state remains in `orchestrator`.
-
-For Python `langgraph-checkpoint-postgres`, verify the installed package
-API. Configure its connections to create/query checkpoint tables in
-`orchestrator`. If using `search_path`, apply it reliably to each
-connection/session, including pooled connections. Do not assume an
-unsupported `schema` constructor argument. Keep SQLAlchemy and
-checkpointer connection configurations explicit; the app URL uses
-`asyncpg`, while checkpointer may require Psycopg.
+For `langgraph-checkpoint-postgres`, verify the installed package API. Configure checkpoint connections to use `orchestrator`; if using `search_path`, apply it reliably to each connection/session, including pooled connections. Do not assume an unsupported constructor argument. Keep application and checkpointer connection configurations explicit.
 
 ## 3. Authentication and trusted context
 
-Follow the shared contract exactly. Known requirements: - Backend-issued
-HS256 lean JWT. - Lean fields: `sub`, `user_id`, `exp`, `iat`, `iss`,
-`aud`. - Obtain trusted context through `GET /auth/me` according to
-agreed lifecycle. - Do not assume roles, org IDs or permissions are in
-the token. - Never trust client-supplied identity, role, org or
-permission. - Never put raw JWTs in prompts or graph state. - Forward
-bearer credentials only when downstream services require them. -
-Downstream authorization is authoritative, especially for sensitive
-operations.
+Follow `docs/CONTRACTS.md` exactly:
+- Backend-issued HS256 lean JWT.
+- Lean claims: `sub`, `user_id`, `exp`, `iat`, `iss`, `aud`.
+- Resolve trusted context through `GET /auth/me` according to the shared lifecycle.
+- Do not assume role, org ID or permissions are embedded in JWT.
+- Never trust client-supplied identity, role, org or permission.
+- Never put raw JWTs in prompts, graph state, checkpoints or logs.
+- Forward bearer credentials only to downstream services that require them.
+- Downstream authorization is authoritative, especially for sensitive operations.
+
+The existing `InternalGraphInput` validates/sanitizes an in-process boundary; it does not authenticate the caller. The future API/worker boundary must authenticate and resolve trusted context before creating graph input.
 
 ## 4. Error envelope
 
 Shared contract envelope:
 
-``` json
+```json
 {
   "error": {
     "code": "FORBIDDEN",
@@ -82,76 +65,67 @@ Shared contract envelope:
 }
 ```
 
-Contract status mapping includes 401 unauthorized, 403 forbidden, 404
-missing/cross-tenant resource as defined by service contract, 422
-validation, 409 conflict and 503 service unavailable.
-
-Map errors to safe workflow outcomes. Never expose SQL, stack traces,
-internal schemas, hidden notes or unauthorized data.
+Use exact shared error codes/status semantics. Map errors to safe workflow outcomes. Never expose SQL, stack traces, internal schemas, hidden notes or unauthorized data.
 
 ## 5. Backend
 
-Backend owns authentication/context, dynamic RBAC, business
-records/rules, tenant isolation/RLS, official messages/notes, refunds
-and business audit logging. Agent orchestrates but does not replace
-Backend authorization. Use exact endpoint paths and payloads in
-canonical `docs/CONTRACTS.md`; do not invent them.
+Backend owns authentication/context, dynamic RBAC, business records/rules, tenant isolation/RLS, official messages/notes, refunds and business audit logging. Agent orchestrates but does not replace Backend authorization. Use exact endpoint paths and payloads in canonical `docs/CONTRACTS.md`; do not invent them.
 
 ## 6. MCP
 
-Use `langchain-mcp-adapters` as required by AGT-2.1. Canonical tools: -
-`get_ticket_details` - `search_tickets` - `create_ticket` -
-`update_ticket_status` - `add_internal_note` - `issue_refund`
+AGT-2.1 uses `langchain-mcp-adapters`. The six canonical tools are:
+- `get_ticket_details`
+- `search_tickets`
+- `create_ticket`
+- `update_ticket_status`
+- `add_internal_note`
+- `issue_refund`
 
-Schemas, transport, required arguments, permission checks and error
-mapping come from the shared contract/current MCP implementation.
-Backend/MCP remains authoritative for business side effects.
+Schemas, transport, required arguments, permission checks and error mapping come from the shared contract/current MCP implementation. Backend/MCP remains authoritative for side effects.
+
+MCP discovery belongs inside the adapter. Discovery does not automatically make a tool available to a specialist or model. Register only the six canonical tools and enforce explicit application-level allowlists.
+
+Proposed default mapping:
+- Triage: ticket details/search/create/status update/internal note (internal note only in staff-authorized flows).
+- Knowledge: no MCP tools by default.
+- Billing: refund issuance only, subject to the shared approval boundary.
+
+This mapping is an application exposure proposal, not an authorization policy. Backend/MCP authorization remains authoritative.
 
 ## 7. RAG
 
-Knowledge Agent accesses RAG through an adapter/port. Contract
-operation: `retrieve_kb(query, limit=5)`. Results include `document_id`,
-`chunk_index`, `title`, `content`, `access_level`, `similarity_score`.
-Access levels include `public`, `internal_staff`, `admin_only`. RAG
-enforces tenant/access filtering. Shared embedding contract:
-`text-embedding-3-small`, 1536 dimensions. Never query RAG tables
-directly or trust model-generated tenant/access filters.
+Knowledge accesses RAG through a port/adapter. Contract operation: `retrieve_kb(query, limit=5)`. Results include `document_id`, `chunk_index`, `title`, `content`, `access_level`, `similarity_score`. Access levels include `public`, `internal_staff`, `admin_only`. RAG enforces tenant/access filtering. Shared embedding contract is `text-embedding-3-small`, 1536 dimensions.
 
-## 8. HITL refund approval
+Pass trusted caller context as required by the agreed RAG interface. RAG must enforce `org_id` and resolved `authorized_kb_tiers`. Never trust model-generated tenant/access filters or query RAG tables directly.
 
-AGT-3.1 requires LangGraph interruption for refunds over \$100 and
-explicit Org_Admin approval. Backend owns approval enforcement/token
-creation/consumption. Agent detects condition, interrupts, persists,
-requests approval, resumes same workflow and invokes the approved
-downstream operation using the contract-defined mechanism. Agent never
-fabricates or bypasses Backend approval tokens. Backend validates
-permission, token validity, single-use, expiry, binding and execution.
+## 8. Refund approval
 
-## 9. Streaming and execution
+The shared contract requires LangGraph interruption and explicit Org_Admin approval for refunds over `$100.00`. Backend owns approval enforcement/token creation/consumption. AGT-3.1 owns Agent interrupt, checkpoint, approval/rejection, resume and approved execution.
 
--   SSE is initial transport between Backend and Agent.
--   Backend proxies without buffering.
--   Workflow continues if SSE disconnects.
--   Event replay uses event IDs / `Last-Event-ID`.
--   One active execution per conversation.
--   Initially one persistent LangGraph thread per conversation.
--   `user_id`, `conversation_id`, `thread_id` remain distinct.
+The adapter may be prepared before AGT-3.1, but do not invoke a refund that requires approval until the AGT-3.1 workflow is implemented. Never fabricate or bypass Backend approval tokens. Follow the shared contract for amounts that do not require HITL.
 
-## 10. Integration topics to verify
+## 9. Workflow orchestration and capability boundaries
 
-Raise these with the owning teammate; do not privately redefine the
-contract: - `/auth/me` context must not be treated as permanent
-authority after permission changes. - Sensitive operations revalidate
-authorization downstream. - MCP transport preserves the shared error
-envelope. - Confirm `search_tickets` and `create_ticket` permission
-requirements. - Confirm note-read contract if private note retrieval is
-needed; do not assume an undocumented tool. - Confirm RAG authentication
-and trusted tenant/access resolution. - Test approval concurrency and
-token replay. - Test cross-tenant attempts against known Org A/Org B
-resources.
+The workflow classifies requests as Quick, Context or Deep:
+- Quick/Context: Analyzer → Supervisor → exactly one specialist.
+- Deep: Analyzer → Planner → validated plan → central Workflow Orchestrator → specialist tasks → Aggregator.
+
+Specialists cannot invoke one another. The central orchestrator owns task scheduling/dependencies. The planner cannot grant capabilities or set trusted identity/tenant/permission data.
+
+The orchestration engine depends on provider-independent capability interfaces. MCP and RAG adapters own transport/protocol details. Currently defined capabilities are only the six MCP tools and `retrieve_kb`. Do not invent invoice/payment lookup, reconciliation, note-reading or other operations.
+
+See `docs/ORCHESTRATION_DESIGN.md` for detailed proposed interfaces and execution-state boundaries. This companion does not amend the shared contract.
+
+## 10. Integration topics to verify with owners
+
+- RAG authentication and trusted tenant/access-tier propagation.
+- MCP transport/session lifecycle and preservation of the shared error envelope.
+- Exact permissions for `search_tickets` and `create_ticket` as implemented by MCP.
+- No note-read tool is defined; do not assume one.
+- Refund approval concurrency, token replay and AGT-3.1 resume behavior.
+- Cross-tenant attempts against known Org A/Org B resources.
+- Whether the proposed specialist capability allowlists match team expectations.
 
 ## 11. Contract change process
 
-If a gap is found: document operation and exact discrepancy; contact the
-owning teammate; agree a team contract update; do not silently edit
-`docs/CONTRACTS.md` or implement an incompatible private interpretation.
+If a gap is found, document the operation and exact discrepancy; contact the owning teammate; agree a team contract update. Do not silently edit `docs/CONTRACTS.md` or implement an incompatible private interpretation.
