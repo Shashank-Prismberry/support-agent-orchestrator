@@ -1,12 +1,24 @@
-# Refreshed documentation bundle
+# Reconciled Documentation Bundle
 
-Contains refreshed project documents based on decisions through 2026-11-24.
+This bundle contains the proposed reconciled project documentation as of 2026-11-25.
 
-Included: IMPLEMENTATION_PLAN.md, COPILOT_MASTER_PROMPT.md,
-.github/copilot-instructions.md, PROGRESS.md, DELIVERABLE_MAPPING.md,
-INTEGRATION_CONTRACT.md, docs/README.md and docs/CONTRACTS.md.
+## Included
 
-docs/CONTRACTS.md is the shared Team Contract v3.0. Preserve and copy it
-unchanged; do not rewrite, format or reconstruct it from memory.
+- `AGENTS.md`
+- `IMPLEMENTATION_PLAN.md`
+- `COPILOT_MASTER_PROMPT.md`
+- `DELIVERABLE_MAPPING.md`
+- `INTEGRATION_CONTRACT.md`
+- `PROGRESS.md`
+- `README.md`
+- `docs/README.md`
+- `docs/ORCHESTRATION_DESIGN.md`
+- `docs/CONTRACTS.md` — copied unchanged from the user-provided Shared Team Contract v3.0.
 
-Also not included: root AGENTS.md, because you already created it in the workspace. Keep that file.
+## Important
+
+`docs/CONTRACTS.md` is the authoritative shared team contract and must remain unchanged. The copy in this bundle is included for convenient comparison/replacement, not as an invitation to overwrite the repository copy.
+
+The official AGT IDs, titles, descriptions and order are preserved. ORCH-P1–P4 are temporary proposed planning labels, not official team-assigned deliverables.
+
+The bundle does not include `.github/copilot-instructions.md` because it was not among the uploaded files. Review that file in the repository separately if it exists, and align it with `COPILOT_MASTER_PROMPT.md` without replacing unrelated repository-specific instructions.
