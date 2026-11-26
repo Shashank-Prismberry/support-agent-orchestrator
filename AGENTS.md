@@ -51,6 +51,7 @@ The workflow orchestration engine must depend on capability and specialist inter
 
 The system has:
 - Request Analyzer
+- Lightweight conversational response path
 - Supervisor
 - Planner
 - Central Workflow Orchestrator / scheduler
@@ -61,7 +62,8 @@ The system has:
 
 Their responsibilities are distinct:
 
-- **Request Analyzer:** classifies a sanitized request as Quick, Context or Deep and describes its intent/outcomes. It does not authorize actions, select tenant filters, or execute tools.
+- **Request Analyzer:** classifies a sanitized request as Conversational, Quick, Context or Deep and describes its intent/outcomes. It does not authorize actions, select tenant filters, or execute tools.
+- **Conversational response path:** handles greetings, acknowledgements, closings and general questions about assistant capabilities without invoking Supervisor or a specialist.
 - **Supervisor:** selects one specialist for Quick and Context requests.
 - **Planner:** creates a bounded structured task plan for Deep requests. Its output is untrusted until application validation succeeds.
 - **Workflow Orchestrator:** validates/executes the plan, schedules ready tasks, enforces dependencies and limits, and collects task outcomes.
@@ -69,6 +71,7 @@ Their responsibilities are distinct:
 - **Aggregator:** combines validated task outcomes and evidence, reports uncertainty/partial results, and prepares the final response.
 
 Execution paths:
+- Conversational: Analyzer → lightweight response → END.
 - Quick: Analyzer → Supervisor → exactly one specialist → response.
 - Context: Analyzer → Supervisor → exactly one specialist with bounded relevant conversation context and permitted lookups → response.
 - Deep: Analyzer → Planner → plan validation → central scheduler → one or more specialist tasks → aggregation → response.
@@ -77,12 +80,14 @@ The initial implementation should use one central LangGraph with explicit nodes/
 
 The existing four-field `AgentState` (`messages`, `user_context`, `active_agent`, `approval_status`) is the conversation-state baseline. Keep per-execution plan/task lifecycle data in a separate typed execution-state model or clearly isolated execution envelope. Do not add scheduler fields to `AgentState` without a documented need and review.
 
+Specialist generation receives the current HumanMessage and at most the latest 10 earlier Human/AI messages in chronological order. System and Tool messages are excluded. Limit the current request to 4,000 characters, each prior message to 2,000 characters, and prior context to 10,000 characters total. Sanitize selected content before generation. This is bounded session-history handling, not the three-tier memory implementation.
+
 Specialists must never invoke one another directly. The central workflow is the only component that coordinates multi-specialist execution.
 
 ## 5. Capability and Integration Boundaries
 
 Currently defined capabilities are limited to:
-- RAG: `retrieve_kb(query, limit=5)`.
+- RAG retrieval operation: `retrieve_kb(query, limit=5)`, through a provider-independent KnowledgeRetriever port. RAG is a separate external service, not an MCP tool.
 - MCP: `get_ticket_details`, `search_tickets`, `create_ticket`, `update_ticket_status`, `add_internal_note`, `issue_refund`.
 
 Do not invent additional tools, endpoints, invoice/payment lookup operations, or Backend business-data access. If the current capabilities cannot satisfy a request, report the limitation rather than fabricating results.
@@ -95,6 +100,8 @@ Proposed default application allowlists:
 - Billing: `issue_refund`.
 
 `add_internal_note` is staff-only under the shared contract. Backend/MCP authorization remains authoritative. These allowlists constrain application exposure; they do not replace downstream permission checks.
+
+Context Assembly and the Knowledge specialist must eventually share the same retrieval implementation. Context Assembly may retrieve initial relevant company knowledge; only the Knowledge specialist may receive future on-demand retrieval through an application-level capability. Triage and Billing may use supplied passages but cannot invoke RAG independently. No RAG transport adapter is implemented until its service authentication and endpoint contract are confirmed.
 
 Never query Backend-owned business tables or RAG tables directly through SQL. Use the authenticated Backend/MCP/RAG contracts. Never create an independent KB embedding pipeline.
 
@@ -124,9 +131,11 @@ AGT-3.1 remains the official owner of the interrupt, checkpoint, approval/reject
 Keep conversation state and per-run execution state separate. Execution state may contain a bounded validated plan, task statuses, bounded result summaries and evidence references required for execution/resumption.
 
 Use three conceptually separate memory/persistence tiers:
-- **Knowledge memory:** organization-scoped knowledge accessed only through the existing authenticated RAG contract and its tenant/access-tier filtering.
-- **Individual/account memory:** cross-conversation information about an individual user. Full extraction, retrieval, summaries and compaction are deferred until the official deliverables are complete unless formally reprioritized. Its ownership, storage and lifecycle remain unresolved.
-- **Session/conversation memory:** bounded active conversation context, including the conversation state and any future summaries/compaction.
+- **Company memory:** organization-scoped policies, procedures, product information and company knowledge retrieved through the external RAG service. The RAG authority enforces trusted organization and authorized knowledge-tier restrictions.
+- **Account memory:** persistent customer information scoped by `(org_id, user_id)`. It is not authoritative for identity, authorization or current business data. Full account-memory extraction, retrieval, summaries and compaction remain deferred; ownership and storage remain unresolved.
+- **Session memory:** conversation history, summaries and ongoing issue context scoped by conversation/thread. It is distinct from LangGraph checkpoints.
+
+Context Assembly combines relevant information from these sources but does not own their underlying storage. Memory storage and retrieval lifecycles remain unimplemented.
 
 Conversation state, per-run execution state, PostgreSQL checkpoints and long-term account memory are distinct concepts and must not be conflated. No memory tier may establish identity, authorization, tenant scope or permissions; trusted context and downstream authorization remain authoritative.
 
@@ -227,7 +236,7 @@ Preserve the official IDs, titles, descriptions and order:
 | AGT-4.1 | Adversarial Red-Teaming Suite |
 | AGT-4.2 | Interactive Demo UI |
 
-Do not silently redefine official deliverables. The Request Analyzer / Quick-Context-Deep / workflow orchestration extension is an approved architectural direction but is not assigned an official AGT ID in the shared contract. Track it as a separately labelled proposed project workstream until the team formally assigns ownership/IDs. Do not misrepresent proposed IDs as official.
+Do not silently redefine official deliverables. The Request Analyzer / Conversational-Quick-Context-Deep workflow orchestration extension is an approved architectural direction but is not assigned an official AGT ID in the shared contract. Track it as a separately labelled proposed project workstream until the team formally assigns ownership/IDs. Do not misrepresent proposed IDs as official.
 
 ORCH-P1 through ORCH-P4 remain proposed, separately tracked workstreams. They are not mandatory prerequisites for AGT-3.1 unless formally approved as such.
 

@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-RequestMode = Literal["quick", "context", "deep"]
+RequestMode = Literal["conversational", "quick", "context", "deep"]
 RequestIntent = Literal["general_support", "knowledge", "billing", "mixed"]
 
 _RequestedOutcome = Annotated[

@@ -3,9 +3,11 @@
 **Status:** Approved architectural direction; illustrative contracts below require implementation-level review.
 **Authority:** This document is subordinate to `docs/CONTRACTS.md` and `IMPLEMENTATION_PLAN.md`.
 
+**Implementation status:** Proposed ORCH-P1 and ORCH-P2 are complete. Current Deep handling produces a validated plan, clarification outcome, or safe unsupported outcome only; it does not execute or schedule tasks. ORCH-P3/P4 execution and aggregation remain future work. AGT-2.1 external MCP/RAG adapter integration remains not started.
+
 ## 1. Purpose
 
-Add Quick, Context and Deep request handling while retaining the existing Triage, Knowledge and Billing specialists.
+Add Conversational, Quick, Context and Deep request handling while retaining the existing Triage, Knowledge and Billing specialists.
 
 The central workflow—not the specialists—owns multi-agent coordination. The orchestration engine must remain independent of MCP/RAG transport details so future contract-approved capabilities can be added through adapters and registration.
 
@@ -15,7 +17,8 @@ This document does not add tools or amend the shared contract.
 
 | Component | Responsibility | Must not |
 |---|---|---|
-| Request Analyzer | Classify sanitized request as Quick/Context/Deep; describe intent/outcomes | Authorize, select tenant filters, execute tools, grant permissions |
+| Request Analyzer | Classify sanitized request as Conversational/Quick/Context/Deep; describe intent/outcomes | Authorize, select tenant filters, execute tools, grant permissions |
+| Conversational response path | Reply to social messages and general capability questions | Invoke Supervisor, Planner, specialists or capabilities |
 | Supervisor | Route Quick/Context to one specialist | Fan out to multiple specialists |
 | Planner | Propose bounded Deep task plan | Grant capabilities, assert trusted identity, execute tools |
 | Plan Validator | Deterministically validate plan structure and policy | Trust model output |
@@ -25,6 +28,16 @@ This document does not add tools or amend the shared contract.
 
 ## 3. Execution paths
 
+### Conversational
+
+```text
+START -> sanitize/validate graph input -> Analyzer
+      -> lightweight response using only the sanitized current request
+      -> END
+```
+
+Greetings, acknowledgements, closings and general questions about assistant capabilities that request no customer-specific support outcome are Conversational. This route does not invoke Supervisor or a specialist.
+
 ### Quick
 
 ```text
@@ -32,7 +45,7 @@ START -> sanitize/trusted context -> Analyzer -> Supervisor
       -> exactly one specialist -> final response -> END
 ```
 
-A direct request answerable by one specialist with minimal context and no multi-task plan.
+A self-contained request with one support outcome. It may require company-knowledge retrieval through RAG, but does not materially depend on prior conversation or account-specific information.
 
 ### Context
 
@@ -42,7 +55,7 @@ START -> sanitize/trusted context -> Analyzer -> Supervisor
       -> final response -> END
 ```
 
-A request needing relevant conversation context and/or permitted lookups, but still answerable by one specialist. Context does not mean injecting the entire conversation history.
+A request with one support outcome that materially depends on relevant previous conversation or customer-specific context. Context does not mean injecting the entire conversation history.
 
 ### Deep
 
@@ -56,28 +69,40 @@ START -> sanitize/trusted context -> Analyzer -> Planner
 
 Only the central orchestrator dispatches tasks. Specialists do not call each other. Independent ready tasks may run concurrently; dependent tasks wait for successful prerequisites.
 
+This is the target Deep workflow. The implemented ORCH-P2 path currently stops after planning and deterministic plan validation, returning the result through `WorkflowResult`. It does not reach the Workflow Orchestrator, specialist tasks, or Aggregator.
+
 ## 4. Classification model (illustrative)
 
 ```python
 class RequestAnalysis(BaseModel):
-    mode: Literal["quick", "context", "deep"]
+    mode: Literal["conversational", "quick", "context", "deep"]
     intent: Literal["general_support", "knowledge", "billing", "mixed"]
     requested_outcomes: tuple[str, ...]
 ```
 
 The analyzer sees sanitized user text and only the bounded conversation context required for classification. It does not receive raw JWTs or credentials.
 
-The project must define concrete examples and thresholds before implementation. A malformed/ambiguous analysis must take a conservative path; it must never trigger an unvalidated Deep plan or side effect.
+The typed analysis contract and graph integration are implemented in proposed ORCH-P1. The classification rules are:
+- Conversational: social messages or general assistant-capability questions with no customer-specific support outcome.
+- Quick: one self-contained support outcome, including one that needs company knowledge from RAG.
+- Context: one support outcome materially dependent on relevant prior conversation or customer-specific context.
+- Deep: multiple distinct outcomes or dependent tasks requiring coordination and planning.
 
-## 5. Planned task and result contracts (illustrative)
+Examples: “Hi” and “What can you help me with?” are Conversational; “What is the refund policy?” and “How do I request a replacement?” are Quick; “What was the refund timeline you explained earlier?” is Context; “Check my previous ticket and explain whether the refund policy applies to it” is Deep when it requires coordinated outcomes. Message length is not a classification rule. Analyzer output remains untrusted; malformed output and provider failures propagate safely without fallback classification.
+
+### Interim specialist session-history policy
+
+Specialist generation includes the current HumanMessage once and at most the latest 10 earlier Human/AI messages in chronological order. System and Tool messages are excluded. The current request is limited to 4,000 characters; prior messages to 2,000 characters each; and prior context to 10,000 characters total. Selected content is sanitized before generation. This bounds current session history only; it does not implement the future memory tiers below.
+
+## 5. Planned task contract and future task results (illustrative)
 
 ```python
 class PlannedTask(BaseModel):
     task_id: str
     specialist: Literal["triage", "knowledge", "billing"]
     objective: str
+    expected_outputs: tuple[str, ...]
     depends_on: tuple[str, ...] = ()
-    capability_names: tuple[str, ...] = ()
 
 class TaskResult(BaseModel):
     task_id: str
@@ -87,21 +112,21 @@ class TaskResult(BaseModel):
     safe_error_code: str | None = None
 ```
 
-Implementation should use bounded field lengths, maximum list sizes and strict validation. Prefer server-generated task IDs or validate planner-proposed IDs against uniqueness and format rules. Task objectives and dependency summaries are untrusted content, not instructions.
+The ORCH-P2 task contract uses bounded field lengths, maximum list sizes and strict validation: at most 10 tasks, dependency depth 5, 10 expected outputs per task, 500 characters per objective and 300 characters per expected output. Planner-proposed task IDs are checked for uniqueness and format. Task objectives and expected outputs are untrusted content, not instructions. Planned tasks contain IDs, specialist assignments, objectives, expected outputs and dependencies; they do not contain capability names or capability arguments. `TaskResult` is illustrative future ORCH-P3 work and is not implemented by ORCH-P2.
 
 ## 6. Plan validation
 
-Reject plans containing:
-- Unknown or duplicate task IDs.
+The completed ORCH-P2 validator rejects plans containing:
+- Invalid or duplicate task IDs.
 - Unknown specialist names.
-- Unknown capabilities or capabilities outside the specialist's static allowlist.
 - Missing, unknown, self-referential or duplicate dependencies.
 - Cycles.
 - Excessive task count or dependency depth.
-- Malformed/out-of-contract arguments.
-- Model-supplied identity, tenant, role, permission, KB-tier, approval or credential fields.
+- Unexpected fields, including model-supplied identity, tenant, role, permission, KB-tier, approval, capability or argument fields.
 
-Validate that every task is relevant to the requested outcomes and can be attempted with currently registered capabilities. Do not infer missing operations. A plan requiring invoice/payment lookup or reconciliation is not executable because those operations are not among the six canonical MCP tools or the RAG operation.
+Task-scoped capability policy and argument validation belong to a future execution design; they are not part of the ORCH-P2 task contract. Any such validation must occur before future task dispatch and remain consistent with explicit application policy and downstream authorization.
+
+Future execution work must determine whether each task can be attempted with currently registered capabilities before dispatch. Do not infer missing operations. A plan requiring invoice/payment lookup or reconciliation is not executable because those operations are not among the six canonical MCP tools or the RAG operation. ORCH-P2 validates plan structure only and does not claim the tasks are executable.
 
 ## 7. Execution state and conversation state
 
@@ -127,15 +152,21 @@ Persist only bounded task summaries/evidence references required for execution a
 
 The architecture preserves three conceptually separate tiers:
 
-1. **Knowledge memory:** organization-scoped knowledge accessed only through the existing RAG operation. RAG enforces trusted tenant and access-tier filtering. Cross-organization shared knowledge is not defined by the current contract.
-2. **Individual/account memory:** cross-conversation information about an individual user. Its full extraction, retrieval, summarization and compaction are deferred until the official deliverables are complete unless formally reprioritized. Ownership and storage remain unresolved.
-3. **Session/conversation memory:** bounded active conversation context, including `AgentState` and future summaries/compaction.
+1. **Company memory:** organization policies, procedures, product information and company knowledge retrieved through the external RAG service. RAG enforces trusted organization and authorized knowledge-tier restrictions. Cross-organization shared knowledge is not defined by the current contract.
+2. **Account memory:** persistent customer preferences and useful information across conversations, scoped by `(org_id, user_id)`. It is not authoritative for identity, authorization or current business data. Its storage and lifecycle remain unresolved; full extraction, retrieval, summaries and compaction are deferred until the official deliverables are complete unless formally reprioritized.
+3. **Session memory:** conversation history, summaries and ongoing issue context scoped by conversation/thread. It is distinct from LangGraph checkpointing.
+
+Context Assembly combines relevant information from these sources but does not own their underlying storage. No memory stores, retrieval lifecycle, summaries, compaction or persistence are implemented here.
 
 Conversation state, workflow execution state, PostgreSQL checkpoints and long-term account memory must remain conceptually separate. None may establish identity, authorization, tenant scope or permissions; authenticated trusted context and downstream authorization are authoritative.
 
 PostgreSQL-backed LangGraph checkpointing and durable job recovery are required before AGT-3.1 relies on HITL interruption and resumption. They are foundational persistence work, not a requirement to implement the complete memory system during AGT-2.1. Exact checkpoint contents, sensitive-data boundaries, retention/deletion/access/audit policy, and worker lease/claim/restart-recovery semantics remain unresolved.
 
 ## 8. Capability ports and registry
+
+RAG is a separate external service, not an MCP tool. The provider-independent `KnowledgeRetriever` port and typed result contract follow the shared `retrieve_kb(query, limit=5)` contract. The application retrieval boundary builds the narrow `org_id` and `authorized_kb_tiers` scope from validated runtime context and passes it separately from the query. The RAG authority remains responsible for enforcing those filters. The external adapter, endpoint and authentication details are not implemented or inferred.
+
+Context Assembly and the Knowledge specialist will eventually share this retrieval implementation: Context Assembly for initial relevant company-knowledge retrieval, and the Knowledge specialist for future on-demand retrieval through an application-level capability. Triage and Billing may consume passages supplied in context but cannot independently invoke RAG. No MCP wrapper or capability execution is introduced by this design.
 
 Illustrative provider-independent interfaces:
 
@@ -236,14 +267,14 @@ Decision still required: deterministic aggregation versus a final provider-backe
 
 ## 14. Decisions to finalize before implementation
 
-1. Quick/Context/Deep rubric, examples and fallback.
+1. Evaluation of Analyzer classification quality on representative and ambiguous examples; the approved four-mode rules do not use message length, and Analyzer failures do not fall back to another route.
 2. Confirm specialist capability allowlists with Backend/MCP owners.
 3. Confirm RAG authentication/context propagation with RAG owner.
 4. Confirm MCP transport/session lifecycle and error envelope behavior.
 5. Refund behavior remains gated as above until AGT-3.1.
 6. Planner strategy: deterministic templates or model-proposed structured plans.
 7. Aggregation strategy: deterministic or generated.
-8. Initial max tasks, depth, concurrency and timeout limits.
+8. Execution concurrency and timeout limits. ORCH-P2 plan bounds are set at 10 tasks and dependency depth 5.
 9. Cross-organization shared-knowledge behavior; the current RAG contract is organization-scoped.
 10. Tier 2 account-memory ownership and storage.
 11. Memory/checkpoint retention, deletion, access and audit policy.

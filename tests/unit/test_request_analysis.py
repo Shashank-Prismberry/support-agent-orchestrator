@@ -1,3 +1,5 @@
+from dataclasses import FrozenInstanceError
+
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from pydantic import ValidationError
@@ -16,7 +18,7 @@ from support_agent_orchestrator.ports.analysis import (
 )
 
 
-@pytest.mark.parametrize("mode", ["quick", "context", "deep"])
+@pytest.mark.parametrize("mode", ["conversational", "quick", "context", "deep"])
 @pytest.mark.parametrize("intent", ["general_support", "knowledge", "billing", "mixed"])
 def test_request_analysis_accepts_supported_values(mode, intent) -> None:
     analysis = RequestAnalysis(
@@ -106,8 +108,10 @@ class FakeAnalyzer:
     def __init__(self, result: object) -> None:
         self.result = result
         self.received: RequestAnalysisInput | None = None
+        self.calls = 0
 
     async def analyze(self, request: RequestAnalysisInput) -> RequestAnalysis:
+        self.calls += 1
         self.received = request
         if isinstance(self.result, Exception):
             raise self.result
@@ -244,6 +248,65 @@ async def test_service_returns_validated_analysis() -> None:
 
     assert result == expected
     assert result is not expected
+
+
+@pytest.mark.asyncio
+async def test_service_returns_validated_analysis_with_exact_prepared_input() -> None:
+    expected = RequestAnalysis(
+        mode="context",
+        intent="general_support",
+        requested_outcomes=("Review the recent conversation",),
+    )
+    analyzer = FakeAnalyzer(expected)
+    service = RequestAnalysisService(analyzer)
+    current_request = "Can you help? password=private-current-value"
+    history = [
+        SystemMessage(content="System-only secret=system-private-value"),
+        HumanMessage(content="Earlier question api_key=prior-private-value"),
+        AIMessage(content="Earlier answer"),
+        ToolMessage(content="Tool-only token=tool-private-value", tool_call_id="lookup"),
+    ]
+
+    result = await service.analyze_with_input(current_request, history)
+
+    assert result.analysis == expected
+    assert result.analysis is not expected
+    assert result.request is analyzer.received
+    assert analyzer.calls == 1
+    assert result.request.current_request.startswith("Can you help?")
+    assert "private-current-value" not in repr(result.request)
+    assert "prior-private-value" not in repr(result.request)
+    assert "system-private-value" not in repr(result.request)
+    assert "tool-private-value" not in repr(result.request)
+    assert "REDACTED_CREDENTIAL" in result.request.current_request
+    assert [message.role for message in result.request.conversation_context] == ["human", "ai"]
+    assert "REDACTED_CREDENTIAL" in result.request.conversation_context[0].content
+    assert all("System-only" not in item.content for item in result.request.conversation_context)
+    assert all("Tool-only" not in item.content for item in result.request.conversation_context)
+    assert all(
+        item.content != result.request.current_request
+        for item in result.request.conversation_context
+    )
+    assert "user_context" not in repr(result.request)
+    assert "org_id" not in repr(result.request)
+    assert "permissions" not in repr(result.request)
+    with pytest.raises(FrozenInstanceError):
+        result.request = RequestAnalysisInput(current_request="replacement")  # type: ignore[misc]
+
+
+@pytest.mark.asyncio
+async def test_analyze_preserves_analysis_only_return_behavior() -> None:
+    expected = RequestAnalysis(
+        mode="quick",
+        intent="general_support",
+        requested_outcomes=("Answer the question",),
+    )
+    analyzer = FakeAnalyzer(expected)
+
+    result = await RequestAnalysisService(analyzer).analyze("Question")
+
+    assert result == expected
+    assert analyzer.calls == 1
 
 
 @pytest.mark.asyncio

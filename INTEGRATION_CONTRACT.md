@@ -94,9 +94,11 @@ This mapping is an application exposure proposal, not an authorization policy. B
 
 ## 7. RAG
 
-Knowledge accesses RAG through a port/adapter. Contract operation: `retrieve_kb(query, limit=5)`. Results include `document_id`, `chunk_index`, `title`, `content`, `access_level`, `similarity_score`. Access levels include `public`, `internal_staff`, `admin_only`. RAG enforces tenant/access filtering. Shared embedding contract is `text-embedding-3-small`, 1536 dimensions.
+RAG is a separate external service, not an MCP tool. Knowledge accesses it through the provider-independent `KnowledgeRetriever` port using `retrieve_kb(query, limit=5)`. Results include `document_id`, `chunk_index`, `title`, `content`, `access_level`, `similarity_score`. Access levels include `public`, `internal_staff`, `admin_only`. RAG enforces tenant/access filtering. Shared embedding contract is `text-embedding-3-small`, 1536 dimensions.
 
-Pass trusted caller context as required by the agreed RAG interface. RAG must enforce `org_id` and resolved `authorized_kb_tiers`. Never trust model-generated tenant/access filters or query RAG tables directly.
+The application retrieval boundary derives `org_id` and `authorized_kb_tiers` from validated context supplied by the authenticated runtime boundary and passes that scope separately from the query. RAG remains authoritative for enforcing both restrictions. Never trust model-generated tenant/access filters or query RAG tables directly. The external endpoint, transport and authentication details remain unresolved; no adapter is implemented.
+
+Context Assembly and the Knowledge specialist will share this retrieval implementation. Context Assembly may perform initial relevant company-knowledge retrieval. Future on-demand retrieval for the Knowledge specialist is an application-level capability, not an MCP tool. Triage and Billing may consume supplied passages but cannot independently retrieve them.
 
 ## 8. Refund approval
 
@@ -106,9 +108,10 @@ The adapter may be prepared before AGT-3.1, but do not invoke a refund that requ
 
 ## 9. Workflow orchestration and capability boundaries
 
-The workflow classifies requests as Quick, Context or Deep:
+The workflow classifies requests as Conversational, Quick, Context or Deep:
+- Conversational: Analyzer → lightweight conversational response → END; no Supervisor or specialist.
 - Quick/Context: Analyzer → Supervisor → exactly one specialist.
-- Deep: Analyzer → Planner → validated plan → central Workflow Orchestrator → specialist tasks → Aggregator.
+- Deep target: Analyzer → Planner → validated plan → central Workflow Orchestrator → specialist tasks → Aggregator. Current implementation stops after the validated plan and does not execute tasks.
 
 Specialists cannot invoke one another. The central orchestrator owns task scheduling/dependencies. The planner cannot grant capabilities or set trusted identity/tenant/permission data.
 
