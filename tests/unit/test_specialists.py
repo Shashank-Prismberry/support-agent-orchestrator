@@ -1,4 +1,5 @@
 import pytest
+from langchain_core.messages import HumanMessage
 
 from support_agent_orchestrator.application.specialists import (
     SpecialistContextError,
@@ -138,7 +139,7 @@ async def test_specialist_sanitizes_provider_failure() -> None:
     state = {
         "active_agent": "knowledge",
         "user_context": TrustedUserContext.model_validate(context),
-        "messages": [],
+        "messages": [HumanMessage(content="Current request")],
     }
     with pytest.raises(SpecialistExecutionError, match="generator failed") as error:
         await node(state)  # type: ignore[arg-type]

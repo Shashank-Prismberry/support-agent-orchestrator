@@ -44,6 +44,8 @@ Implementation:
 
 Tests: mocked adapter contract tests; discovery/invocation; invalid inputs; timeouts/rate limits/unavailability; shared error mapping; explicit registration/allowlists; no direct SQL; no model-supplied tenant identity or KB filters.
 
+Architecture note: the provider-independent KnowledgeRetriever port and result contract are available as an architecture boundary, but no external RAG adapter or MCP integration is implemented. The official AGT-2.1 status remains Not started.
+
 ### AGT-3.1 — Human-in-the-Loop (HITL) Refund Gate
 
 **Status:** Not started.
@@ -86,34 +88,50 @@ Checks: persona switch uses approved identity flow; streaming displays correctly
 
 ## Proposed workflow-orchestration workstream (not official AGT tasks)
 
-**Status:** Architectural direction approved by project user; implementation not started. The labels below are temporary planning identifiers only. They must not be represented as official AGT IDs or team-assigned tasks until formally approved.
+**Status:** Architectural direction approved by project user. ORCH-P1 and ORCH-P2 are implemented; ORCH-P3 and ORCH-P4 are not started. These are proposed workstreams, not official AGT deliverables or team-assigned tasks.
 
 ### ORCH-P1 — Request Analysis and Mode Routing
 
+**Status:** Complete.
+
 Scope:
-- Define and test Quick/Context/Deep classification rubric.
+- Implement and test the typed Conversational/Quick/Context/Deep analysis contract and graph routing for those mode values.
 - Implement typed Request Analyzer over sanitized input/bounded relevant context.
+- Route Conversational requests to a lightweight response path without Supervisor or specialist invocation.
 - Preserve Quick/Context Supervisor → exactly one specialist route.
-- Define conservative fallback for ambiguous/invalid analyzer output.
+- Require all three specialist nodes and pass bounded, sanitized session history to specialist generation.
+- Propagate malformed output and provider failures safely without silent fallback classification.
 
 Acceptance:
 - Analyzer cannot authorize, choose tenant filters or execute capabilities.
 - Quick/Context invoke exactly one specialist.
+- Conversational invokes no Supervisor or specialist.
+- Specialist generation excludes System/Tool messages and applies explicit message and character bounds.
 - Existing AGT-1.1/1.2 behavior remains covered by regression tests.
+- Mode values are validated and routed without silent fallback classification.
+
+Semantic classification quality evaluation remains deferred until a concrete Analyzer provider is available. The current implementation defines the classification contract and graph routing; it does not enforce message-to-mode semantics.
 
 ### ORCH-P2 — Deep Planning and Plan Validation
 
+**Status:** Complete (P2.1–P2.6).
+
 Scope:
-- Define typed task, dependency and result contracts.
-- Add bounded Planner interface/implementation.
-- Validate task IDs, specialist names, capability allowlists, arguments, dependencies, cycles, task count and depth.
+- Define strict task and planning-result contracts. Each planned task contains an ID, specialist, objective, expected outputs and dependencies; it contains no capability names or capability arguments.
+- Add the provider-independent asynchronous Planner port and application PlanningService.
+- Reuse the exact sanitized and bounded request input prepared by the Request Analyzer.
+- Validate task IDs, specialist names, dependencies, cycles, task count and dependency depth.
+- Integrate plan-only Deep outcomes into the graph while preserving Quick/Context routing.
 
 Acceptance:
-- Invalid or unsupported plans are rejected before execution.
-- Planner cannot grant capabilities or set trusted identity/tenant/permission fields.
-- Plans cannot reference capabilities beyond the six MCP tools and `retrieve_kb`.
+- Invalid proposals and dependency graphs are rejected before a plan is returned.
+- Planner cannot receive trusted identity/tenant/permission data or grant authorization.
+- Deep requests currently return a validated plan, clarification outcome or fixed safe unsupported outcome; tasks are not executed or scheduled.
+- ORCH-P2 does not implement or complete AGT-2.1 external MCP/RAG integration.
 
 ### ORCH-P3 — Workflow Execution and Specialist Task Contract
+
+**Status:** Not started. Owns future task execution and scheduling.
 
 Scope:
 - Define separate per-run execution state.

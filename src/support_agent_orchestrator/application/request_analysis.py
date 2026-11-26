@@ -1,6 +1,7 @@
 """Application boundary for safely invoking the request analyzer port."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 from pydantic import ValidationError
@@ -25,6 +26,14 @@ class InvalidRequestAnalysisOutputError(RuntimeError):
     """Safe error raised when the analyzer returns an invalid result."""
 
 
+@dataclass(frozen=True)
+class AnalyzedRequest:
+    """Validated analysis paired with the exact sanitized input sent to its analyzer."""
+
+    analysis: RequestAnalysis
+    request: RequestAnalysisInput
+
+
 class RequestAnalysisService:
     """Sanitize and bound request context before calling an analyzer port."""
 
@@ -37,6 +46,15 @@ class RequestAnalysisService:
         conversation_context: Sequence[AnyMessage] = (),
     ) -> RequestAnalysis:
         """Analyze sanitized request text without supplying trusted context."""
+
+        return (await self.analyze_with_input(current_request, conversation_context)).analysis
+
+    async def analyze_with_input(
+        self,
+        current_request: str,
+        conversation_context: Sequence[AnyMessage] = (),
+    ) -> AnalyzedRequest:
+        """Return validated analysis and the exact prepared input sent to the analyzer."""
 
         context_messages = _recent_messages(conversation_context)
         sanitized = sanitize_messages([HumanMessage(content=current_request), *context_messages])
@@ -57,11 +75,12 @@ class RequestAnalysisService:
 
         try:
             payload = result.model_dump() if isinstance(result, RequestAnalysis) else result
-            return RequestAnalysis.model_validate(payload, strict=True)
+            analysis = RequestAnalysis.model_validate(payload, strict=True)
         except (ValidationError, TypeError, ValueError, AttributeError):
             raise InvalidRequestAnalysisOutputError(
                 "The request analyzer returned invalid output"
             ) from None
+        return AnalyzedRequest(analysis=analysis, request=analyzer_input)
 
 
 def _recent_messages(messages: Sequence[AnyMessage]) -> tuple[AnyMessage, ...]:

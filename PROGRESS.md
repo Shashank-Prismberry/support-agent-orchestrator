@@ -1,9 +1,9 @@
 # Project Progress — Support Agent Orchestrator
 
-**Last updated:** 2026-11-25
+**Last updated:** 2026-11-26
 **Overall status:** AGT-1.1 and AGT-1.2 complete; AGT-2.1 not started
 **Current official deliverable:** AGT-2.1 — RAG & MCP Tool Wiring
-**Architecture direction:** Quick/Context/Deep workflow orchestration approved as a project direction. Proposed ORCH-P1 is implemented; ORCH-P2 through ORCH-P4 remain unstarted.
+**Architecture direction:** Conversational/Quick/Context/Deep workflow orchestration approved as a proposed project direction. ORCH-P1 and ORCH-P2 are implemented; ORCH-P3 and ORCH-P4 remain unstarted.
 
 ## Decisions established
 
@@ -17,16 +17,19 @@
 - Hexagonal Architecture and replaceable ports/adapters.
 - Central LangGraph workflow with Triage, Knowledge and Billing specialists.
 - Specialists do not invoke one another; central workflow owns multi-specialist execution.
-- Request Analyzer classifies Quick/Context/Deep.
+- Request Analyzer classifies Conversational/Quick/Context/Deep.
+- Conversational messages use a lightweight response path with no Supervisor or specialist invocation.
 - Quick/Context use Supervisor → exactly one specialist.
-- Deep uses Planner → validated plan → central scheduler → specialist tasks → Aggregator.
+- Specialist generation includes bounded, sanitized Human/AI session history and excludes System/Tool messages.
+- Deep currently uses Planner → validated plan and returns a plan-only result. Task execution, scheduling and aggregation are future proposed work.
 - Capability layer is independent of MCP transport; only six contract-defined MCP tools and `retrieve_kb` are currently in scope.
 - Backend/MCP authorization and tenant isolation remain authoritative.
 - Refund approval requirements remain intact; AGT-3.1 owns HITL interrupt/checkpoint/approval/resume.
 - SSE event replay/reconnection; disconnect does not cancel workflow.
 - One active execution per conversation; one persistent LangGraph thread per conversation initially.
 - Keep `user_id`, `conversation_id`, `thread_id` distinct.
-- Three-tier memory architecture: organization-scoped RAG knowledge; deferred individual/account memory across conversations; and bounded session/conversation memory with future summaries/compaction.
+- Three-tier memory architecture: Company memory through organization-scoped external RAG; Account memory scoped by `(org_id, user_id)` and deferred; Session memory scoped by conversation/thread. Context Assembly combines relevant sources without owning their storage.
+- The provider-independent KnowledgeRetriever port and typed result contract are implemented. RAG remains a separate external service, not MCP; no external RAG adapter or authentication/endpoint behavior is implemented.
 - Memory is not an identity, authorization, tenant-scope or permission source.
 - Conversation state, workflow execution state, PostgreSQL checkpoints and long-term account memory remain conceptually separate.
 - PostgreSQL checkpointing and durable job recovery are foundational requirements before AGT-3.1 relies on HITL interruption/resumption; this does not expand AGT-2.1 into persistence or full memory work.
@@ -55,6 +58,16 @@
   - P1.4 — Integrated analysis into LangGraph with private workflow state, Quick/Context routing, terminal Deep handling, and safe analyzer failure propagation.
   - Security corrections — Added common credential-assignment redaction, Human/AI-only prior-context filtering, and a bounded routing-message role length.
   - Verification — Full test suite: 153 passed; focused tests for the latest corrections: 84 passed; Ruff passed.
+- Proposed ORCH-P2 — Deep Planner completed separately from the official AGT deliverables:
+  - P2.1 — Added strict, immutable planning domain contracts.
+  - P2.2 — Added provider-independent planning input and asynchronous Planner port.
+  - P2.3 — Enabled reuse of the exact sanitized, bounded analyzer input.
+  - P2.4 — Added deterministic task ID, dependency, cycle and depth validation.
+  - P2.5 — Added the application PlanningService with safe disposition and failure handling.
+  - P2.6 — Integrated planning into the graph and standardized public outcomes through `WorkflowResult`.
+  - Scope — Deep requests return a validated plan, clarification outcome or safe unsupported outcome. Tasks are not executed; no scheduler, MCP/RAG adapter or external integration was added.
+  - Verification — Complete test suite: 261 passed; Ruff lint and formatting checks on the changed Python files passed.
+- Approved architecture reconciliation on the ORCH-P2 branch adds the Conversational route, requires all three specialist nodes, bounds specialist session history, and defines the shared RAG retrieval boundary. Deep remains plan-only; no memory stores, RAG adapter, MCP integration or capability execution were added.
 
 Historical test counts differ across progress snapshots and completion summaries. Preserve the detailed completion evidence in the relevant task/review history; do not treat the counts below as a fresh test run.
 
@@ -76,8 +89,8 @@ These are temporary planning labels, not official AGT task IDs. Team ownership/I
 
 | Proposed work | Scope | Status |
 |---|---|---|
-| ORCH-P1 | Request Analyzer and Quick/Context/Deep routing | Complete |
-| ORCH-P2 | Deep Planner and plan/DAG validation | Not started |
+| ORCH-P1 | Request Analyzer and Conversational/Quick/Context/Deep routing | Complete |
+| ORCH-P2 | Deep Planner and plan/DAG validation | Complete |
 | ORCH-P3 | Execution state, scheduler and specialist task interface | Not started |
 | ORCH-P4 | Aggregation, partial failures and reliability | Not started |
 
@@ -85,14 +98,14 @@ These are temporary planning labels, not official AGT task IDs. Team ownership/I
 
 - Live integration with Backend, MCP or RAG.
 - AGT-2.1 adapters and capability registration.
-- Planner, scheduler and Aggregator implementation.
+- Task execution, scheduler and Aggregator implementation (ORCH-P3/P4).
 - Formal team assignment/IDs for ORCH-P1–P4.
-- Final Quick/Context/Deep classification rubric.
+- Analyzer quality evaluation against the approved four-mode classification rules.
 - Final RAG authentication/context propagation details with RAG owner.
 - Final MCP transport/session lifecycle details with MCP owner.
 - Final execution checkpoint retention/access policy.
 - Cross-organization shared-knowledge behavior.
-- Tier 2 account-memory ownership and storage.
+- Account-memory ownership and storage.
 - Memory/checkpoint retention, deletion, access and audit policy.
 - Exact checkpoint contents and sensitive-data boundaries.
 - Durable worker lease, claim and restart-recovery semantics.
@@ -102,12 +115,11 @@ Do not mark work complete unless actually implemented and verified.
 
 ## Immediate next steps
 
-1. Reconcile and review project documentation.
-2. Confirm any remaining team-owned decisions: capability allowlists, RAG context propagation, MCP transport/error behavior, formal ORCH task ownership and classification rubric.
-3. Finalize AGT-2.1 implementation design and dependencies.
-4. Implement AGT-2.1 capability contracts/adapters using only defined operations; do not expand it into the complete persistence or memory system.
-5. Establish the approved PostgreSQL checkpointing and durable recovery foundation before AGT-3.1 depends on HITL interruption/resumption.
-6. Continue planning ORCH-P2 through ORCH-P4 as separately approved workstreams; ORCH-P1 is complete, and these proposed workstreams are not mandatory prerequisites for AGT-3.1.
+1. Confirm remaining team-owned decisions: capability allowlists, RAG context propagation, MCP transport/error behavior, formal ORCH task ownership and classification rubric.
+2. Finalize AGT-2.1 implementation design and dependencies.
+3. Implement AGT-2.1 capability contracts/adapters using only defined operations; do not expand it into the complete persistence or memory system.
+4. Establish the approved PostgreSQL checkpointing and durable recovery foundation before AGT-3.1 depends on HITL interruption/resumption.
+5. Continue planning ORCH-P3 and ORCH-P4 as separately approved workstreams; ORCH-P1 and ORCH-P2 are complete, and these proposed workstreams are not mandatory prerequisites for AGT-3.1.
 
 ## Update rule
 
