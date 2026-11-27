@@ -1,9 +1,13 @@
+from pathlib import Path
 from uuid import UUID
 
 import pytest
+from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 
 from support_agent_orchestrator.domain.context import TrustedUserContext
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 
 
 @pytest.fixture
