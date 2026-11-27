@@ -1,6 +1,6 @@
 # Support Agent Orchestrator — Project Handoff
 
-**Snapshot date:** 2026-11-27  
+**Snapshot date:** 2026-11-27
 **Purpose:** Self-contained status and continuation guide for a new coding agent.
 
 ## A. Project overview
