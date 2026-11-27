@@ -86,6 +86,16 @@ Implementation: choose UI framework when this deliverable begins; approved test 
 
 Checks: persona switch uses approved identity flow; streaming displays correctly; approval controls only for pending approvals; UI does not bypass Backend auth.
 
+## Agent persistence foundation (separate engineering work; no official AGT ID)
+
+**Status:** Initial acceptance persistence is implemented and locally integration-tested.
+
+- SQLAlchemy 2.x async with `asyncpg`, Core tables, and an Agent-owned Alembic environment target only `orchestrator_db.orchestrator`.
+- `AtomicRequestAcceptor` persists the inbound session message, accepted execution, scoped idempotency record, and dispatch eligibility in one transaction. A PostgreSQL advisory lock enforces one active execution per trusted conversation scope.
+- Migration `20261126_01` is applied locally. It creates `session_messages`, `executions`, and `idempotency_records`; the Alembic version table is in `orchestrator`.
+- Verification: 18 PostgreSQL acceptance integration tests and the full 349-test suite passed during closeout. These results establish local acceptance behavior, not an API, worker, checkpoint, SSE, or memory implementation.
+- Deferred: durable job dispatch/claims, LangGraph checkpointing, conversation-history retrieval, Account Memory, Context Assembly, and the full memory lifecycle. These do not receive new official AGT IDs here.
+
 ## Proposed workflow-orchestration workstream (not official AGT tasks)
 
 **Status:** Architectural direction approved by project user. ORCH-P1 and ORCH-P2 are implemented; ORCH-P3 and ORCH-P4 are not started. These are proposed workstreams, not official AGT deliverables or team-assigned tasks.

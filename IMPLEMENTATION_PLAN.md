@@ -238,11 +238,14 @@ Configure per-tool and overall workflow deadlines. HITL waiting does not consume
 
 ## 10. Database and persistence ownership
 
-- PostgreSQL database: `support_ai_db`
+- Backend PostgreSQL database: `support_ai_db` (Backend-owned; Agent must not connect to it)
+- Agent PostgreSQL database: `orchestrator_db`
 - Backend-owned schema: `public`
 - Agent-owned schema: `orchestrator`
 
-Backend provisions `orchestrator`; Agent manages its own migrations/checkpoint setup there. Never modify Backend-owned tables/migrations. Never query Backend business tables directly.
+The PostgreSQL server hosts separate Backend and Agent databases. The Agent database owner provisions `orchestrator_db.orchestrator`; Agent manages its own migrations/checkpoint setup there. Never modify Backend-owned tables/migrations. Never connect to `support_ai_db` or query Backend business tables directly.
+
+**Current local persistence status:** The initial Agent migration `20261126_01` is applied to `orchestrator_db.orchestrator`. It creates `session_messages`, `executions`, and `idempotency_records`; it does not create job, checkpoint, SSE, or memory tables. The migration target is validated online, and the Alembic version table is stored in `orchestrator`. Local runtime, migration, and optional integration-test URLs are loaded from the ignored root `.env`; exported shell variables take precedence. Current verified host mapping is `localhost:5433` to container port `5432`.
 
 Use `langgraph-checkpoint-postgres` for durable checkpointing. Verify the installed package API before configuring schema/search_path. Apply connection schema settings reliably to pooled connections. Keep application and checkpointer connection configuration explicit.
 

@@ -1,19 +1,46 @@
-# Support Agent Orchestrator — Current Implementation Notes
+# Support Agent Orchestrator
 
-## Internal graph input boundary
+Independent Python service for coordinating customer-support workflows. The
+project uses LangGraph with a Ports and Adapters boundary; Backend remains the
+authority for identity, authorization, business records, and side effects.
 
-The LangGraph wrapper accepts only `InternalGraphInput`, created with `create_internal_graph_input`. This validates and sanitizes the in-process contract; it does not authenticate callers. The API/worker boundary must authenticate the Backend-issued JWT and resolve trusted context through `GET /auth/me` before creating graph input. Do not treat Pydantic validation or `TrustedUserContext` construction as proof of authentication provenance.
+## Current implementation
 
-## Current graph invocation contract
+- AGT-1.1 and AGT-1.2 are implemented: Supervisor routing and the Triage,
+  Knowledge, and Billing specialist nodes.
+- Proposed ORCH-P1 and ORCH-P2 are implemented: request-mode analysis and
+  validated Deep plans. Deep execution, scheduling, and aggregation are not
+  implemented.
+- PostgreSQL atomic request acceptance is implemented. The initial migration
+  is applied to `orchestrator_db.orchestrator` at revision `20261126_01`.
+- The FastAPI transport, worker process, LangGraph PostgreSQL checkpointer,
+  external MCP/RAG adapters, and full three-tier memory stores are not yet
+  implemented.
 
-Legacy graphs built without injected specialists should use `OrchestrationGraph.invoke()` for reliable supported execution. They expose `await OrchestrationGraph.ainvoke()` for compatibility, but LangGraph 1.2.24 has a known process-lifecycle limitation when synchronous nodes are executed through that path. This is an upstream runtime limitation, not an application-level deadlock.
+See [Project Handoff](docs/PROJECT_HANDOFF.md) for the complete architecture,
+database state, task status, commands, and prioritized next steps.
 
-Graphs built with asynchronous specialist nodes are async-only: callers must use `ainvoke()`. Synchronous `invoke()` on those graphs raises `AsyncOnlyGraphError`; no event-loop bridging or synchronous adapter is used.
+## Local environment
 
-## Architecture evolution
+Use Python 3.12 and uv. Create `.env` from `.env.example` if it does not
+already exist, then set local database credentials. The root `.env` is ignored
+by Git and loaded by Pydantic Settings. Exported variables take precedence.
+Copy the optional `TEST_DATABASE_URL` example into `.env` only when you intend
+to run PostgreSQL integration tests against `orchestrator_db`.
 
-The implementation currently completed for AGT-1.1 and AGT-1.2 is the Supervisor → one specialist → END baseline. The approved target architecture adds Request Analyzer and Quick/Context/Deep handling:
-- Quick/Context continue through Supervisor → exactly one specialist.
-- Deep will use Planner → validated plan → central workflow scheduler → specialist tasks → Aggregator.
+```bash
+uv sync
+source .venv/bin/activate
+uv run alembic current
+uv run pytest tests/unit
+uv run pytest tests/integration/test_postgres_acceptance_integration.py -v
+uv run pytest
+uv run ruff check src tests migrations
+uv run ruff format --check src tests migrations
+```
 
-The new architecture is a target design, not a claim that these components are already implemented. See `IMPLEMENTATION_PLAN.md` and `docs/ORCHESTRATION_DESIGN.md`.
+The integration suite writes and cleans up generated acceptance records in
+`orchestrator_db`; run it serially and do not point `TEST_DATABASE_URL` at
+Backend's `support_ai_db`. Alembic upgrade is `uv run alembic upgrade head`.
+
+There is not yet an application/API entry point or a worker command to run.

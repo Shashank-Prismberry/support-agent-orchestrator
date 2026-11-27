@@ -16,20 +16,23 @@ Frontend does not call Agent directly. Backend forwards authenticated requests a
 
 ## 2. Database ownership
 
-- PostgreSQL database: `support_ai_db`
+- Backend PostgreSQL database: `support_ai_db` (Backend-owned; Agent must not connect to it)
+- Agent PostgreSQL database: `orchestrator_db`
 - Backend-owned schema: `public`
 - Agent-owned schema: `orchestrator`
-- Backend provisions `orchestrator` during database/Docker initialization.
-- Agent manages its migrations/checkpointer in `orchestrator`.
+- Agent owns and manages `orchestrator_db.orchestrator` and its migrations/checkpointer.
 - Backend Alembic remains scoped to `public`.
 
-Backend-provided local development example:
+Agent local development URL formats (this workstation's PostgreSQL server is available at `localhost:5433`; URL-encode the local password):
 
 ```env
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/support_ai_db
+DATABASE_URL=postgresql+asyncpg://orchestrator_user:<URL-encoded-password>@<existing-postgres-host>:<confirmed-port>/orchestrator_db
+AGENT_MIGRATION_DATABASE_URL=postgresql+asyncpg://orchestrator_user:<URL-encoded-password>@<existing-postgres-host>:<confirmed-port>/orchestrator_db
 ```
 
-Local defaults only; never use as production credentials.
+Runtime and migration settings remain separate. The current approved topology uses `orchestrator_user` for both; do not place credentials in source control. Never connect Agent persistence to `support_ai_db`.
+
+The repository-root `.env` is loaded by Pydantic Settings for runtime and Alembic. Pytest loads it before integration tests read `TEST_DATABASE_URL`. Exported shell variables override file values. `.env` is ignored by Git and must not be shared; `.env.example` and `.env.test.example` contain placeholders only. PostgreSQL integration tests remain opt-in when `TEST_DATABASE_URL` is absent. Current local migration revision is `20261126_01`.
 
 Agent operational data may include LangGraph checkpoints/blobs, workflow jobs, conversation/ephemeral turn records and SSE event history. Business data remains Backend-owned.
 
