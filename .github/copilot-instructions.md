@@ -12,8 +12,10 @@ and `PROGRESS.md`.
 -   Independent Agent Orchestrator service; not the Backend.
 -   Hexagonal Architecture; graph core independent of
     FastAPI/infrastructure.
--   One database `support_ai_db`; Backend owns `public`, Agent owns
-    `orchestrator`.
+-   One PostgreSQL server with separate databases: Backend owns
+    `support_ai_db`; Agent owns `orchestrator_db.orchestrator`.
+-   Agent runtime and migration configuration must reject
+    `support_ai_db`.
 -   Never query Backend business tables directly. Use authenticated
     APIs/MCP.
 -   Follow shared Team Contract v3.0; do not redefine it.

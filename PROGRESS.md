@@ -1,6 +1,6 @@
 # Project Progress — Support Agent Orchestrator
 
-**Last updated:** 2026-11-26
+**Last updated:** 2026-11-27
 **Overall status:** AGT-1.1 and AGT-1.2 complete; AGT-2.1 not started
 **Current official deliverable:** AGT-2.1 — RAG & MCP Tool Wiring
 **Architecture direction:** Conversational/Quick/Context/Deep workflow orchestration approved as a proposed project direction. ORCH-P1 and ORCH-P2 are implemented; ORCH-P3 and ORCH-P4 remain unstarted.
@@ -11,8 +11,9 @@
 - Frontend → Backend → Agent; Backend proxies SSE.
 - Separate API and worker processes/containers.
 - PostgreSQL-backed job dispatch initially; no Redis initially.
-- Database `support_ai_db`; Backend schema `public`; Agent schema `orchestrator`.
-- Backend provisions `orchestrator`; Agent manages its schema migrations/checkpointer.
+- One PostgreSQL server with separate databases: Backend owns `support_ai_db`; Agent owns `orchestrator_db.orchestrator`.
+- A PostgreSQL administrator provisions `orchestrator_db.orchestrator`; Agent manages its schema migrations/checkpointer there.
+- The Agent persistence foundation uses SQLAlchemy async with `asyncpg`, a separate Agent-owned Alembic history, explicit `orchestrator` targeting, and online migration target checks. Runtime and migration URLs are separate settings. The initial migration `20261126_01` is applied and verified in the local `orchestrator_db.orchestrator` database. Database/schema provisioning remains administrator-owned; local credentials remain only in the ignored root `.env`.
 - Business data only through authenticated Backend APIs and agreed MCP tools.
 - Hexagonal Architecture and replaceable ports/adapters.
 - Central LangGraph workflow with Triage, Knowledge and Billing specialists.
@@ -68,6 +69,13 @@
   - Scope — Deep requests return a validated plan, clarification outcome or safe unsupported outcome. Tasks are not executed; no scheduler, MCP/RAG adapter or external integration was added.
   - Verification — Complete test suite: 261 passed; Ruff lint and formatting checks on the changed Python files passed.
 - Approved architecture reconciliation on the ORCH-P2 branch adds the Conversational route, requires all three specialist nodes, bounds specialist session history, and defines the shared RAG retrieval boundary. Deep remains plan-only; no memory stores, RAG adapter, MCP integration or capability execution were added.
+- Task 2.1 — Added environment-backed PostgreSQL settings, an async engine/session lifecycle, and an isolated Alembic environment for the Agent schema. The original database-name assumption was `support_ai_db`; it is superseded by the approved separate database `orchestrator_db`. Added configuration, engine/session, and migration-policy tests. At Task 2.1 completion no database adapter or migration revision was included; the following Task 2.2 added those.
+- Task 2.2 — Added the SQLAlchemy Core acceptance tables, the `orchestrator` migration revision, and a PostgreSQL implementation of `AtomicRequestAcceptor` with scoped uniqueness and conflict-safe insertion. Historical verification skipped integration tests before a live test URL was configured. The migration is now applied at `20261126_01`; see the closeout record below for current verification.
+- Task 2.2 review correction — Request acceptance now acquires a PostgreSQL transaction-scoped advisory lock for the trusted `(org_id, user_id, conversation_id)` scope, resolves idempotency before checking active executions, and returns `conversation_busy` for a new request when the conversation is active. The existing global message identity is not a per-conversation chronological sequence; per-conversation ordering is deferred to the Session Memory phase. PostgreSQL concurrency behavior requires the integration suite and is not established by unit tests.
+- Shared PostgreSQL test target — The Agent uses the existing PostgreSQL server but connects only to the separate `orchestrator_db.orchestrator`; no separate Agent PostgreSQL container is configured. Host applications use `localhost:5433`, mapped to container port `5432`. Integration tests load `TEST_DATABASE_URL` from the root `.env` and remain skipped when it is absent.
+- Closeout — Fixed Alembic's read-only preflight transaction boundary: validation queries are rolled back before Alembic configures its migration transaction. This prevents DDL and the version record from being rolled back when the connection closes. Unit regression tests cover both valid and invalid preflight cleanup, and the PostgreSQL integration suite asserts the recorded revision.
+- Closeout verification — Applied `20261126_01`; read-only checks confirmed the three acceptance tables and `orchestrator.alembic_version` exist in `orchestrator`, the recorded revision is correct, the schema owner is `orchestrator_user`, and no acceptance/Alembic tables exist in `public`. `support_ai_db` was not connected to or queried. The focused PostgreSQL suite passed 18 tests; the full suite passed 349 tests. Ruff checks and formatting passed for Orchestrator source, tests, and migrations. `uv lock --check` passed.
+- Local environment — Runtime and migration settings load the ignored root `.env` through Pydantic Settings. Pytest loads it before integration modules inspect `os.environ`, without overriding exported shell variables. The file is mode `600`; templates contain placeholders only.
 
 Historical test counts differ across progress snapshots and completion summaries. Preserve the detailed completion evidence in the relevant task/review history; do not treat the counts below as a fresh test run.
 

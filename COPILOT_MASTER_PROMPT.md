@@ -21,7 +21,8 @@ Build an independent Python 3.12 Agent Orchestrator service for a multi-tenant B
 - Frontend → Backend → Agent Orchestrator; Backend proxies HTTP/SSE.
 - Independent Agent service; separate API and worker processes/containers.
 - PostgreSQL-backed job dispatch initially; no Redis initially.
-- One database `support_ai_db`; Backend owns `public`, Agent owns `orchestrator`.
+- One PostgreSQL server with separate databases: Backend owns `support_ai_db`; Agent owns `orchestrator_db.orchestrator`.
+- The Agent must reject `support_ai_db` for runtime and migration URLs.
 - Never query Backend business tables directly; use authenticated Backend REST APIs and agreed MCP tools.
 - Hexagonal Architecture (Ports and Adapters), dependency injection and replaceable adapters.
 - Central LangGraph workflow with Request Analyzer, Supervisor, Planner, Workflow Orchestrator, Triage/Knowledge/Billing specialists and Aggregator.

@@ -16,6 +16,7 @@
 - `DELIVERABLE_MAPPING.md` — official AGT tasks and separately labelled proposed orchestration work.
 - `INTEGRATION_CONTRACT.md` — Agent integration boundaries.
 - `PROGRESS.md` — current project status.
+- `PROJECT_HANDOFF.md` — platform-independent implementation, database, setup, and next-step snapshot.
 - `COPILOT_MASTER_PROMPT.md` — reusable Copilot/session context.
 - `.github/copilot-instructions.md` — Copilot compatibility instructions, if present.
 
